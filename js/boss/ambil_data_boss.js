@@ -4,7 +4,7 @@ import fs from 'fs/promises';
 
 // Function to fetch data from the website
 async function fetchToramData(page) {
-    const url = `https://toram-id.com/monster/type/mini_boss?page=${page}`;
+    const url = `https://toram-id.com/monster/type/boss?page=${page}`;
     const response = await fetch(url);
     const text = await response.text();
     
@@ -44,19 +44,27 @@ function joinDrops(drops) {
   return drops.map(drop => drop.name).join(', ');
 }
 
-// Function to extract level from the name and modify the object
-function extractLevel(obj) {
-  const match = obj.name.match(/Lv (\d+)/);
-  if (match) {
-    obj.lvl = match[1]; // Convert to string
+// Function to extract level and difficulty from the name and modify the object
+function extractLevelAndDiff(obj) {
+  const diffMatch = obj.name.match(/\((Easy|Normal|Hard|Nightmare|Ultimate)\)/);
+  if (diffMatch) {
+    obj.diff = diffMatch[1];
+    obj.name = obj.name.replace(` (${obj.diff})`, '').trim();
+  } else {
+    obj.diff = '-'; // Default difficulty if not specified
+  }
+
+  const levelMatch = obj.name.match(/Lv (\d+)/);
+  if (levelMatch) {
+    obj.lvl = levelMatch[1]; // Convert to string
     obj.name = obj.name.replace(` (Lv ${obj.lvl})`, '').trim();
   }
 }
 
 // Function to reorder properties
 function reorderProperties(obj) {
-  const { name, lvl, element, hp, xp, leveling, map, drops } = obj;
-  return { name, lvl, element, hp, xp, leveling, map, drops };
+  const { name, diff, lvl, element, hp, xp, leveling, map, drops } = obj;
+  return { name, diff, lvl, element, hp, xp, leveling, map, drops };
 }
 
 // Function to extract level from the object for sorting
@@ -66,7 +74,7 @@ function extractLevelForSorting(obj) {
 
 // Function to get the total number of pages
 async function getTotalPages() {
-    const url = `https://toram-id.com/monster/type/mini_boss?page=1`;
+    const url = `https://toram-id.com/monster/type/boss?page=1`;
     const response = await fetch(url);
     const text = await response.text();
     
@@ -80,11 +88,13 @@ async function processToramData() {
   try {
     // Get the total number of pages
     const totalPages = await getTotalPages();
+    console.log(`Total pages: ${totalPages}`);
     let allData = [];
 
     // Fetch data from all pages
     for (let page = 1; page <= totalPages; page++) {
         const data = await fetchToramData(page);
+        console.log(`Fetched data from page ${page}`);
         allData = allData.concat(data);
     }
 
@@ -94,21 +104,23 @@ async function processToramData() {
       drops: joinDrops(obj.drops)
     }));
 
-    // Process each object to extract level and modify the name
-    processedData.forEach(extractLevel);
+    // Process each object to extract level and difficulty, and modify the name
+    processedData.forEach(extractLevelAndDiff);
 
     // Reorder properties for each object
     const reorderedData = processedData.map(reorderProperties);
 
     // Sort the data by level
-    const sortedData = reorderedData.sort((a, b) => extractLevelForSorting(a) - extractLevelForSorting(b));
+    const sortedData1 = reorderedData.sort((a, b) => extractLevelForSorting(a) - extractLevelForSorting(b));
 
     // Save the sorted data to sorted_toram_data.json
-    await fs.writeFile('sorted_toram_data.json', JSON.stringify(sortedData, null, 2));
+    await fs.writeFile('sorted_toram_data.json', JSON.stringify(sortedData1, null, 2));
     console.log('Data has been saved to sorted_toram_data.json');
+
   } catch (error) {
     console.error('Error processing data:', error);
   }
 }
 
+// Run the main function
 processToramData();
